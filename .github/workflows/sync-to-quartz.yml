@@ -1,0 +1,35 @@
+name: Sync denial page to Quartz site
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout access-denial
+        uses: actions/checkout@v4
+        with:
+          path: source
+
+      - name: Checkout latura-quartz
+        uses: actions/checkout@v4
+        with:
+          repository: RSOS-ops/latura-quartz
+          token: ${{ secrets.QUARTZ_PUSH_TOKEN }}
+          path: dest
+
+      - name: Copy denial page into Quartz repo
+        run: |
+          mkdir -p dest/extra/denied
+          rsync -av --exclude='.git' --exclude='.github' source/ dest/extra/denied/
+
+      - name: Commit and push if changed
+        run: |
+          cd dest
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add extra/denied
+          git diff --staged --quiet || git commit -m "Sync access-denial page"
+          git push
