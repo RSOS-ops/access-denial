@@ -87,6 +87,23 @@
       pointer-events: none;
     }
 
+    /* ---- "Tap or Click" hint (top-center) ---- */
+    #tapHint {
+      position: fixed;
+      top: max(16px, env(safe-area-inset-top));
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 11px;
+      font-weight: 400;
+      letter-spacing: 0.08em;
+      color: rgba(255, 255, 255, 0.7);
+      pointer-events: none;
+      user-select: none;
+      z-index: 2;
+      white-space: nowrap;
+    }
+
     /* ---- "Go Back" button — hidden until 3s after the video ends ---- */
     #goBack {
       position: fixed;
@@ -140,6 +157,8 @@
     oncontextmenu="return false"
   ></video>
 
+  <div id="tapHint">Tap or Click</div>
+
   <button id="muteBtn" class="is-muted" type="button" aria-label="Unmute" aria-pressed="true">
     <!-- Muted: speaker with an X -->
     <svg class="icon icon-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -166,6 +185,7 @@
       var video = document.getElementById("video");
       var muteBtn = document.getElementById("muteBtn");
       var goBackBtn = document.getElementById("goBack");
+      var tapHint = document.getElementById("tapHint");
 
       var LANDSCAPE_SRC = "media/access-denied-landscape-1.mp4";
       var PORTRAIT_SRC = "media/access-denied-portrait-1.mp4";
@@ -232,6 +252,7 @@
         // Let the mute button handle its own clicks separately.
         if (e.target.closest && e.target.closest("#muteBtn")) return;
         setMuted(false);
+        tapHint.style.display = "none";
         removeTapToUnmute();
       }
 
@@ -263,6 +284,7 @@
         hasEnded = true;
         video.pause();
         removeTapToUnmute();
+        tapHint.style.display = "none";
         muteBtn.classList.add("hidden"); // nothing left to toggle once frozen
 
         setTimeout(function () {
