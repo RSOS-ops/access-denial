@@ -141,6 +141,15 @@
       color: #000;
       outline: none;
     }
+
+    /* Transparent layer that absorbs all touches before they reach the video,
+       preventing mobile browsers from pausing playback on tap. Sits above the
+       video (z-index 0) but below the buttons (z-index 2). */
+    #overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+    }
   </style>
 </head>
 <body>
@@ -156,6 +165,8 @@
     x5-playsinline
     oncontextmenu="return false"
   ></video>
+
+  <div id="overlay"></div>
 
   <div id="tapHint">Tap or Click</div>
 
