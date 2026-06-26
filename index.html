@@ -218,15 +218,36 @@
       // Safety net in case loadeddata is slow/missed.
       window.addEventListener("load", startPlayback, { once: true });
 
-      /* ---- Mute / unmute toggle ---- */
+      /* ---- Shared mute-state helper ---- */
+      function setMuted(muted) {
+        video.muted = muted;
+        if (!muted) video.volume = 1.0;
+        muteBtn.classList.toggle("is-muted", muted);
+        muteBtn.setAttribute("aria-pressed", String(muted));
+        muteBtn.setAttribute("aria-label", muted ? "Unmute" : "Mute");
+      }
+
+      /* ---- Tap / click anywhere to unmute (fires once) ---- */
+      function onFirstInteraction(e) {
+        // Let the mute button handle its own clicks separately.
+        if (e.target.closest && e.target.closest("#muteBtn")) return;
+        setMuted(false);
+        removeTapToUnmute();
+      }
+
+      function removeTapToUnmute() {
+        document.removeEventListener("click", onFirstInteraction, true);
+        document.removeEventListener("touchstart", onFirstInteraction, true);
+      }
+
+      document.addEventListener("click", onFirstInteraction, true);
+      document.addEventListener("touchstart", onFirstInteraction, true);
+
+      /* ---- Mute button toggle ---- */
       muteBtn.addEventListener("click", function () {
-        video.muted = !video.muted;
-        if (!video.muted) {
-          video.volume = 1.0;
-        }
-        muteBtn.classList.toggle("is-muted", video.muted);
-        muteBtn.setAttribute("aria-pressed", String(video.muted));
-        muteBtn.setAttribute("aria-label", video.muted ? "Unmute" : "Mute");
+        // Once the user consciously controls the button, retire the tap-anywhere shortcut.
+        removeTapToUnmute();
+        setMuted(!video.muted);
       });
 
       /* ---- Prevent restart / repeat ---- */
@@ -241,6 +262,7 @@
       video.addEventListener("ended", function () {
         hasEnded = true;
         video.pause();
+        removeTapToUnmute();
         muteBtn.classList.add("hidden"); // nothing left to toggle once frozen
 
         setTimeout(function () {
