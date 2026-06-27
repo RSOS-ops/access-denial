@@ -23,7 +23,6 @@
       inset: 0;
     }
 
-    /* Full-screen video, no native controls, no interaction */
     #video {
       position: fixed;
       inset: 0;
@@ -31,7 +30,34 @@
       height: 100%;
       object-fit: cover;
       background: #000;
-      pointer-events: none; /* user cannot pause / scrub / restart */
+      pointer-events: none;
+    }
+
+    /* Sits above the video, below the buttons. Intercepts all touches so
+       the video element never receives them — critical for preventing iOS
+       Safari from pausing on tap via its native gesture recognizer. */
+    #overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ---- "Tap or Click" hint (top-center) ---- */
+    #tapHint {
+      position: fixed;
+      top: max(16px, env(safe-area-inset-top));
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      font-weight: 400;
+      letter-spacing: 0.08em;
+      color: rgba(255, 255, 255, 0.7);
+      pointer-events: none;
+      user-select: none;
+      z-index: 3;
+      white-space: nowrap;
     }
 
     /* ---- Mute / unmute toggle (bottom-right) ---- */
@@ -53,7 +79,7 @@
       backdrop-filter: blur(4px);
       -webkit-tap-highlight-color: transparent;
       transition: opacity 0.4s ease, background 0.2s ease, transform 0.1s ease;
-      z-index: 2;
+      z-index: 3;
     }
 
     #muteBtn:hover,
@@ -72,39 +98,16 @@
       display: none;
     }
 
-    #muteBtn.is-muted .icon-muted {
-      display: block;
-    }
+    #muteBtn.is-muted .icon-muted   { display: block; }
+    #muteBtn:not(.is-muted) .icon-unmuted { display: block; }
 
-    #muteBtn:not(.is-muted) .icon-unmuted {
-      display: block;
-    }
-
-    /* Hidden once the video has ended (no audio left to toggle). */
     #muteBtn.hidden {
       opacity: 0;
       visibility: hidden;
       pointer-events: none;
     }
 
-    /* ---- "Tap or Click" hint (top-center) ---- */
-    #tapHint {
-      position: fixed;
-      top: max(16px, env(safe-area-inset-top));
-      left: 50%;
-      transform: translateX(-50%);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-size: 14px;
-      font-weight: 400;
-      letter-spacing: 0.08em;
-      color: rgba(255, 255, 255, 0.7);
-      pointer-events: none;
-      user-select: none;
-      z-index: 2;
-      white-space: nowrap;
-    }
-
-    /* ---- "Go Back" button — hidden until 3s after the video ends ---- */
+    /* ---- "Go Back" button ---- */
     #goBack {
       position: fixed;
       left: 50%;
@@ -127,7 +130,7 @@
       backdrop-filter: blur(4px);
       -webkit-tap-highlight-color: transparent;
       user-select: none;
-      z-index: 2;
+      z-index: 3;
     }
 
     #goBack.show {
@@ -140,15 +143,6 @@
       background: rgba(255, 255, 255, 0.95);
       color: #000;
       outline: none;
-    }
-
-    /* Transparent layer that absorbs all touches before they reach the video,
-       preventing mobile browsers from pausing playback on tap. Sits above the
-       video (z-index 0) but below the buttons (z-index 2). */
-    #overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 1;
     }
   </style>
 </head>
@@ -166,19 +160,18 @@
     oncontextmenu="return false"
   ></video>
 
+  <!-- Intercepts all touches; z-index keeps it above the video but below buttons -->
   <div id="overlay"></div>
 
   <div id="tapHint">Tap or Click</div>
 
   <button id="muteBtn" class="is-muted" type="button" aria-label="Unmute" aria-pressed="true">
-    <!-- Muted: speaker with an X -->
     <svg class="icon icon-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor"
          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor" stroke="none" />
       <line x1="16" y1="9" x2="22" y2="15" />
       <line x1="22" y1="9" x2="16" y2="15" />
     </svg>
-    <!-- Unmuted: speaker with sound waves -->
     <svg class="icon icon-unmuted" viewBox="0 0 24 24" fill="none" stroke="currentColor"
          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor" stroke="none" />
@@ -193,19 +186,19 @@
     (function () {
       "use strict";
 
-      var video = document.getElementById("video");
-      var muteBtn = document.getElementById("muteBtn");
+      var video    = document.getElementById("video");
+      var overlay  = document.getElementById("overlay");
+      var muteBtn  = document.getElementById("muteBtn");
       var goBackBtn = document.getElementById("goBack");
-      var tapHint = document.getElementById("tapHint");
+      var tapHint  = document.getElementById("tapHint");
 
       var LANDSCAPE_SRC = "media/access-denied-landscape-1.mp4";
-      var PORTRAIT_SRC = "media/access-denied-portrait-1.mp4";
+      var PORTRAIT_SRC  = "media/access-denied-portrait-1.mp4";
 
-      /* ---- Choose the correct video file ---- */
+      /* ---- Device / orientation detection ---- */
       function isMobileDevice() {
         var ua = navigator.userAgent || "";
         var uaMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua);
-        // iPadOS reports as desktop Safari, so also treat coarse-pointer + touch as mobile.
         var touchCoarse =
           (navigator.maxTouchPoints || 0) > 1 &&
           window.matchMedia &&
@@ -214,42 +207,32 @@
       }
 
       function isPortrait() {
-        if (window.matchMedia) {
-          return window.matchMedia("(orientation: portrait)").matches;
-        }
-        return window.innerHeight >= window.innerWidth;
+        return window.matchMedia
+          ? window.matchMedia("(orientation: portrait)").matches
+          : window.innerHeight >= window.innerWidth;
       }
 
-      // Portrait file only for mobile devices held upright; everything else is landscape.
-      var src = isMobileDevice() && isPortrait() ? PORTRAIT_SRC : LANDSCAPE_SRC;
-      video.src = src;
+      video.src = isMobileDevice() && isPortrait() ? PORTRAIT_SRC : LANDSCAPE_SRC;
 
-      /* ---- Playback: autoplay, muted (so it ALWAYS starts) ---- */
+      /* ---- Autoplay, muted ---- */
       video.muted = true;
       video.loop = false;
       video.controls = false;
 
       function startPlayback() {
-        var attempt = video.play();
-        if (attempt && typeof attempt.then === "function") {
-          attempt.catch(function () {
-            // Muted playback should never be blocked; retry once on next tick.
-            setTimeout(function () {
-              video.play().catch(function () {});
-            }, 150);
+        var p = video.play();
+        if (p && p.catch) {
+          p.catch(function () {
+            setTimeout(function () { video.play().catch(function () {}); }, 150);
           });
         }
       }
 
-      if (video.readyState >= 2) {
-        startPlayback();
-      } else {
-        video.addEventListener("loadeddata", startPlayback, { once: true });
-      }
-      // Safety net in case loadeddata is slow/missed.
+      if (video.readyState >= 2) { startPlayback(); }
+      else { video.addEventListener("loadeddata", startPlayback, { once: true }); }
       window.addEventListener("load", startPlayback, { once: true });
 
-      /* ---- Shared mute-state helper ---- */
+      /* ---- Mute state ---- */
       function setMuted(muted) {
         video.muted = muted;
         if (!muted) video.volume = 1.0;
@@ -258,60 +241,74 @@
         muteBtn.setAttribute("aria-label", muted ? "Unmute" : "Mute");
       }
 
-      /* ---- Tap / click anywhere to unmute (fires once) ---- */
-      function onFirstInteraction(e) {
-        // Let the mute button handle its own clicks separately.
-        if (e.target.closest && e.target.closest("#muteBtn")) return;
+      /* ---- One-shot unmute ---- */
+      var unmuted = false;
+      function doUnmute() {
+        if (unmuted || hasEnded) return;
+        unmuted = true;
         setMuted(false);
         tapHint.style.display = "none";
-        removeTapToUnmute();
+        document.removeEventListener("click", onDesktopClick, true);
       }
 
-      function removeTapToUnmute() {
-        document.removeEventListener("click", onFirstInteraction, true);
-        document.removeEventListener("touchstart", onFirstInteraction, true);
+      /* ---- Desktop: click anywhere to unmute ---- */
+      function onDesktopClick(e) {
+        if (e.target.closest && e.target.closest("#muteBtn")) return;
+        doUnmute();
       }
+      document.addEventListener("click", onDesktopClick, true);
 
-      document.addEventListener("click", onFirstInteraction, true);
-      document.addEventListener("touchstart", onFirstInteraction, true);
+      /* ---- Mobile: overlay touchstart ----
+         passive:false + preventDefault() cancels iOS Safari's native
+         media gesture BEFORE it reaches the video engine, so the video
+         cannot be paused by tap. This is the primary mobile fix. ---- */
+      overlay.addEventListener("touchstart", function (e) {
+        e.preventDefault();   // <-- kills the native iOS tap-to-pause gesture
+        doUnmute();
+        // Belt-and-suspenders: if the native engine still sneaks a pause through,
+        // resume immediately on the next tick (still inside the user-gesture window).
+        if (!hasEnded && video.paused) {
+          video.play().catch(function () {});
+        }
+      }, { passive: false });
 
-      /* ---- Mute button toggle ---- */
+      /* ---- Mute button ---- */
       muteBtn.addEventListener("click", function () {
-        // Once the user consciously controls the button, retire the tap-anywhere shortcut.
-        removeTapToUnmute();
+        document.removeEventListener("click", onDesktopClick, true);
+        unmuted = true;
         setMuted(!video.muted);
       });
 
-      /* ---- Prevent restart / repeat ---- */
+      /* ---- Last-resort: resume if anything external pauses the video ---- */
       var hasEnded = false;
-      video.addEventListener("seeking", function () {
-        if (hasEnded && video.duration && isFinite(video.duration)) {
-          video.currentTime = video.duration; // snap back to final frame
+      video.addEventListener("pause", function () {
+        if (!hasEnded) {
+          setTimeout(function () { video.play().catch(function () {}); }, 0);
         }
       });
 
-      /* ---- End of playback: freeze, hide mute, wait 3s, reveal button ---- */
+      /* ---- Prevent seek-back ---- */
+      video.addEventListener("seeking", function () {
+        if (hasEnded && video.duration && isFinite(video.duration)) {
+          video.currentTime = video.duration;
+        }
+      });
+
+      /* ---- End of playback ---- */
       video.addEventListener("ended", function () {
         hasEnded = true;
         video.pause();
-        removeTapToUnmute();
+        document.removeEventListener("click", onDesktopClick, true);
         tapHint.style.display = "none";
-        muteBtn.classList.add("hidden"); // nothing left to toggle once frozen
-
-        setTimeout(function () {
-          goBackBtn.classList.add("show");
-        }, 3000);
+        muteBtn.classList.add("hidden");
+        setTimeout(function () { goBackBtn.classList.add("show"); }, 3000);
       });
 
-      /* ---- Go Back: return to the previous page ---- */
+      /* ---- Go Back ---- */
       goBackBtn.addEventListener("click", function () {
-        if (window.history.length > 1) {
-          window.history.back();
-        } else if (document.referrer) {
-          window.location.href = document.referrer;
-        } else {
-          window.close(); // last resort if opened directly with no history
-        }
+        if (window.history.length > 1) { window.history.back(); }
+        else if (document.referrer)     { window.location.href = document.referrer; }
+        else                            { window.close(); }
       });
     })();
   </script>
